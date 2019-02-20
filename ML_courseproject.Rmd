@@ -1,0 +1,128 @@
+---
+title: "Human Activity Classification"
+author: "Navya Kumar"
+output: html_document
+---
+
+## Snyopsis  
+  
+Analyzing data (source: http://groupware.les.inf.puc-rio.br/har) from sensors worn on the body and placed within exercise equipment, we classify how *well* a certain exercise activity was performed by six human volunteers. The classifications are: "A" - exactly according to the specification, "B" - throwing the elbows to the front, "C" - lifting the dumbbell only halfway, "D" - lowering the dumbbell only halfway, and "E" - throwing the hips to the front. Class "A" is the only correct procedure, rest all four are faulty.  
+  
+For our purpose, we compare two methods--Recursive Partitioning And Regression Trees (rpart) and Random Forest (rf)--for their prediction accuracy and choose the more accurate to apply to the validation data set.  
+  
+## Gathering and Cleaning Data  
+
+Downloading data files and reading them in:  
+```{r loaddata}
+
+fileURL1 = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileURL1, "builddata.csv")
+
+fileURL2 = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileURL2, "validatedata.csv")
+
+buildset = read.csv("builddata.csv")
+validateset = read.csv("validatedata.csv")
+
+```  
+
+Explore data structure:  
+```{r exploredata}
+str(buildset, list.len = 20)
+
+```
+
+Of 160 columns, many are with near zero variance, of little relevance to our classification purpose, or with too many missing values. Identifying such columns and removing from the datasets. 
+```{r cleandata}
+library(caret)
+
+# near zero variance
+NZV = nearZeroVar(buildset)
+
+# irrelevant columns with serial number of observations, names of volunteers, and three types of timestamps 
+irrelev = 1:5
+
+# columns with more than 90% missing values
+
+missvalcol = numeric()
+for(i in 1:ncol(buildset)){
+ifelse((length(which(is.na(buildset[,i]))) / length(buildset[,i])) > 0.90, missvalcol[i] <- i, missvalcol[i] <- 
+0)
+}
+
+# removing columns identified to be dropped 
+
+buildset = buildset[,-c(NZV, irrelev, missvalcol)]
+validateset = validateset[,-c(NZV, irrelev, missvalcol)]
+
+```
+
+## Setting Data for Cross Validation  
+  
+For cross-validation, We choose random sampling without replacement to partition the build data set into a training set (70%) and a test set (30%). 
+
+```{r cvdata, message=FALSE}
+
+set.seed(321321)
+
+rowtrain = createDataPartition(buildset$classe, p = 0.70, list = FALSE)
+
+trainset = buildset[rowtrain, ]
+testset = buildset[-rowtrain, ]
+```
+
+## Build and Compare Models  
+
+### Build  
+
+It being a classification problem, we will compare the performance of Recursive Partitioning and Regression Trees (rpart) and Random Forest (rf).  
+```{r buildmodels}
+set.seed(321321)
+fit.rpart = train(data= trainset, classe~., method = "rpart")
+fit.rf = train(data= trainset, classe~., method = "rf", ntree = 64)
+
+``` 
+
+**NOTE:** we have limited the number of trees in Random Forest to 64 because of computational resource constraint. Our decision to choose the number 64 is backed by research from Oshiro et al. (2012).  
+  
+### Compare  
+
+We will compare the accuracy of both models on goodness of fit against training data, as well as prediction against test data.  
+```{r comparemodels}
+
+pred.rpart = predict(fit.rpart, newdata = testset)
+pred.rf = predict(fit.rf, newdata = testset)
+
+confmat.rpart = confusionMatrix(pred.rpart, testset$classe)
+confmat.rf = confusionMatrix(pred.rf, testset$classe)
+
+fit.rpart$results[fit.rpart$results[,"cp"]==fit.rpart$bestTune$cp,c("Accuracy", "Kappa")]
+fit.rf$results[fit.rf$results[,"mtry"]==fit.rf$bestTune$mtry,c("Accuracy", "Kappa")]
+
+confmat.rpart$overall[c("Accuracy", "Kappa")]
+confmat.rf$overall[c("Accuracy", "Kappa")]
+
+par(mfrow= c(1,2), bg = "white")
+plot(confmat.rpart$table, main = paste("RPART ( Accuracy: ", round(confmat.rpart$overall["Accuracy"],3),")"))
+plot(confmat.rf$table, main = paste("Random Forest ( Accuracy: ", round(confmat.rf$overall["Accuracy"],3),")"))
+```  
+
+We see that Random Forest far outperforms RPART decision tree in accuracy on training and test sets and will therefore be our chosen model.  
+
+We expect out-of-sample error against the validation set to be similar to the out-of-bag (OOB) error rate of the final model: 0.25%.
+```{r finalmodel}
+fit.rf$finalModel
+
+plot(x=1:fit.rf$finalModel$ntree, y=fit.rf$finalModel$err.rate[,1], type="l", xlab="Number of Trees", ylab="OOB Error", main="OOB Error by Number of Trees")
+
+```
+
+The near flattening out of OOB error beyond (approx.) the 40th tree shows we have not overly compromised accuracy by limiting the number of trees to 64 in view of computational constraints.  
+
+## Conclusion  
+
+We predict against the validation set and present the prediction in the form required for the quiz:  
+```{r predict}
+finaloutput = data.frame(CaseID = 1:20, prediction = predict(fit.rf, validateset))
+print(finaloutput)
+```
