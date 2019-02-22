@@ -206,7 +206,7 @@ plot(x=1:fit.rf$finalModel$ntree, y=fit.rf$finalModel$err.rate[,1], type="l", xl
 
 ![](ML_courseproject_files/figure-html/finalmodel-1.png)<!-- -->
 
-We expect out-of-sample error against the validation set to be similar to the out-of-bag (OOB) error rate of the final model: ~0.2%.  
+**We expect out-of-sample error against the validation set to be similar to the out-of-bag (OOB) error rate of the final model: ~0.2%.**  
   
 The near flattening out of OOB error beyond (approx.) the 40th tree shows we have not overly compromised accuracy by limiting the number of trees to 64 in view of computational constraints.  
 
