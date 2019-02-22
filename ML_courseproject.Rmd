@@ -30,7 +30,7 @@ validateset = read.csv("validatedata.csv")
 
 Explore data structure:  
 ```{r exploredata}
-str(buildset, list.len = 20)
+str(buildset, list.len = 20) 
 
 ```
 
